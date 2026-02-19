@@ -1,0 +1,85 @@
+name: "04 - Формирование changelog.md"
+
+on:
+  pull_request:
+    branches: [main, master]
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-changelog:
+    name: "Генерация changelog"
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ -f VERSION ]; then
+            VERSION=$(cat VERSION)
+          else
+            VERSION="0.1.0"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get commit messages
+        id: commits
+        run: |
+          COMMITS=$(git log ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} --pretty=format:"- %s" | head -20)
+          echo "commits=$COMMITS" >> $GITHUB_OUTPUT
+
+      - name: Create changelog entry
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          VERSION="${{ steps.get_version.outputs.version }}"
+          echo "## v$VERSION ($DATE)" > new_changelog.md
+          echo "" >> new_changelog.md
+          echo "### Изменения:" >> new_changelog.md
+          echo "${{ steps.commits.outputs.commits }}" >> new_changelog.md
+          echo "" >> new_changelog.md
+          echo "---" >> new_changelog.md
+          echo "" >> new_changelog.md
+          if [ -f changelog.md ]; then
+            cat changelog.md >> new_changelog.md
+          fi
+          mv new_changelog.md changelog.md
+
+      - name: Commit changelog
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add changelog.md
+          git commit -m "docs: update changelog for v${{ steps.get_version.outputs.version }}" || echo "No changes"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save changelog as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: changelog.md
+          retention-days: 30
+
+  add-changelog-label:
+    name: "Добавить label changelog"
+    needs: generate-changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add label
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
