@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 jobs:
   docker-build-push:
@@ -63,10 +64,32 @@ jobs:
     needs: docker-build-push
     runs-on: ubuntu-latest
     steps:
-      - name: Add label
-        uses: actions-ecosystem/action-add-labels@v1
+      - name: Add dockerhub label
+        uses: actions/github-script@v7
         with:
-          labels: dockerhub
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'dockerhub'
+              }).catch(async () => {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'dockerhub',
+                  color: '0e8a16',
+                  description: 'Published to Docker Hub'
+                });
+              });
+              
+              await github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['dockerhub']
+              });
+            } catch (error) {
+              console.log('Note: Label may not be added due to PR state');
+            }
