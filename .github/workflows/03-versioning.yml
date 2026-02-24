@@ -67,7 +67,8 @@ jobs:
           echo "old_version=$CURRENT" >> $GITHUB_OUTPUT
 
       - name: Update VERSION file
-        run: echo "${{ steps.bump.outputs.new_version }}" > VERSION
+        run: |
+          echo "${{ steps.bump.outputs.new_version }}" > VERSION
 
       - name: Commit new version
         run: |
@@ -77,6 +78,7 @@ jobs:
           git commit -m "[${{ steps.bump.outputs.new_version }}] <- [${{ steps.bump.outputs.old_version }}] ${{ steps.bump.outputs.version_type }} up" || echo "No changes"
           git push
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   add-version-label:
     name: "Добавить label с версией"
